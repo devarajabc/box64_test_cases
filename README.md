@@ -1,5 +1,7 @@
 # Box64 Test Cases
 
+[![Box64 Test Cases](https://github.com/YOUR_USERNAME/box64_test_cases/actions/workflows/test.yml/badge.svg)](https://github.com/YOUR_USERNAME/box64_test_cases/actions/workflows/test.yml)
+
 A collection of test programs to verify Box64 behavior, reproduce bugs, and validate fixes.
 
 ## Overview
@@ -61,6 +63,7 @@ make docker-build
 | ID | Name | Description | Status |
 |----|------|-------------|--------|
 | 001 | fork_in_used_leak | Stale dynablock `in_used` after fork() | Open |
+| 002 | 0f00_missing_braces | Missing braces in x64run0f.c opcode 0x00 | Open |
 
 ## Running Tests
 

@@ -1,0 +1,156 @@
+name: Test Box64
+
+on:
+  push:
+    branches: [ main, master ]
+  pull_request:
+  workflow_dispatch:
+    inputs:
+      use_qemu:
+        description: 'Force QEMU instead of ARM64 runner'
+        required: false
+        default: 'false'
+        type: boolean
+
+jobs:
+  # Primary: Use GitHub ARM64 runner (fast, for public repos)
+  test-arm64-runner:
+    name: ARM64 Runner
+    runs-on: ubuntu-24.04-arm
+    if: ${{ github.event.inputs.use_qemu != 'true' }}
+
+    steps:
+    - uses: actions/checkout@v4
+
+    - name: Install dependencies
+      run: |
+        sudo apt-get update
+        sudo apt-get install -y build-essential cmake git file
+
+    - name: Install x86_64 cross-compiler
+      run: |
+        sudo apt-get install -y gcc-x86-64-linux-gnu g++-x86-64-linux-gnu
+
+    - name: Build x86_64 tests
+      run: make all CC=x86_64-linux-gnu-gcc
+
+    - name: Verify binaries are x86_64
+      run: file bin/*
+
+    - name: Build Box64
+      run: |
+        git clone --depth 1 https://github.com/ptitSeb/box64.git /tmp/box64
+        cd /tmp/box64
+        mkdir build && cd build
+        cmake .. -D ARM_DYNAREC=ON -D CMAKE_BUILD_TYPE=RelWithDebInfo
+        make -j$(nproc)
+        sudo make install
+
+    - name: Run tests (interpreter)
+      run: |
+        echo "=== BOX64_DYNAREC=0 (interpreter) ==="
+        for test in bin/*; do
+          echo ""
+          echo ">>> $test"
+          BOX64_DYNAREC=0 box64 "$test" || echo "EXIT CODE: $?"
+        done
+
+    - name: Run tests (dynarec)
+      run: |
+        echo "=== BOX64_DYNAREC=1 (dynarec) ==="
+        for test in bin/*; do
+          echo ""
+          echo ">>> $test"
+          BOX64_DYNAREC=1 box64 "$test" || echo "EXIT CODE: $?"
+        done
+
+  # Fallback: Use QEMU on x86_64 runner (slower, always available)
+  test-qemu-fallback:
+    name: QEMU Fallback
+    runs-on: ubuntu-latest
+    if: ${{ github.event.inputs.use_qemu == 'true' || failure() }}
+    needs: [test-arm64-runner]
+    # Run if ARM64 job fails OR if manually triggered with use_qemu=true
+
+    steps:
+    - uses: actions/checkout@v4
+
+    - name: Set up QEMU
+      uses: docker/setup-qemu-action@v3
+      with:
+        platforms: arm64
+
+    - name: Build and test in ARM64 container
+      run: |
+        docker run --rm --platform linux/arm64 \
+          -v ${{ github.workspace }}:/workspace \
+          -w /workspace \
+          arm64v8/ubuntu:22.04 \
+          bash -c '
+            set -e
+            echo "=== Setting up environment ==="
+            apt-get update
+            apt-get install -y build-essential cmake git file gcc-x86-64-linux-gnu
+
+            echo "=== Building x86_64 test binaries ==="
+            make all CC=x86_64-linux-gnu-gcc
+            file bin/*
+
+            echo "=== Building Box64 ==="
+            git clone --depth 1 https://github.com/ptitSeb/box64.git /tmp/box64
+            cd /tmp/box64
+            mkdir build && cd build
+            cmake .. -D ARM_DYNAREC=ON -D CMAKE_BUILD_TYPE=RelWithDebInfo
+            make -j$(nproc)
+            make install
+            cd /workspace
+
+            echo ""
+            echo "=== Running tests (interpreter) ==="
+            for test in bin/*; do
+              echo ""
+              echo ">>> $test"
+              BOX64_DYNAREC=0 box64 "$test" || echo "EXIT CODE: $?"
+            done
+
+            echo ""
+            echo "=== Running tests (dynarec) ==="
+            for test in bin/*; do
+              echo ""
+              echo ">>> $test"
+              BOX64_DYNAREC=1 box64 "$test" || echo "EXIT CODE: $?"
+            done
+          '
+
+  # Always-run QEMU job (can be enabled for parallel testing)
+  test-qemu-always:
+    name: QEMU (parallel)
+    runs-on: ubuntu-latest
+    if: false  # Set to true to always run QEMU in parallel with ARM64 runner
+
+    steps:
+    - uses: actions/checkout@v4
+
+    - name: Set up QEMU
+      uses: docker/setup-qemu-action@v3
+      with:
+        platforms: arm64
+
+    - name: Build and test in ARM64 container
+      run: |
+        docker run --rm --platform linux/arm64 \
+          -v ${{ github.workspace }}:/workspace \
+          -w /workspace \
+          arm64v8/ubuntu:22.04 \
+          bash -c '
+            apt-get update
+            apt-get install -y build-essential cmake git file gcc-x86-64-linux-gnu
+            make all CC=x86_64-linux-gnu-gcc
+            git clone --depth 1 https://github.com/ptitSeb/box64.git /tmp/box64
+            cd /tmp/box64 && mkdir build && cd build
+            cmake .. -D ARM_DYNAREC=ON -D CMAKE_BUILD_TYPE=RelWithDebInfo
+            make -j$(nproc) && make install
+            cd /workspace
+            echo "=== Interpreter ===" && BOX64_DYNAREC=0 box64 bin/* || true
+            echo "=== Dynarec ===" && BOX64_DYNAREC=1 box64 bin/* || true
+          '
