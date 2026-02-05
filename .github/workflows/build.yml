@@ -1,0 +1,60 @@
+name: Build x86_64 Test Binaries
+
+on:
+  push:
+    branches: [ main ]
+  pull_request:
+    branches: [ main ]
+  workflow_dispatch:  # Allow manual trigger
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+
+    steps:
+    - name: Checkout
+      uses: actions/checkout@v4
+
+    - name: Install dependencies
+      run: |
+        sudo apt-get update
+        sudo apt-get install -y gcc make
+
+    - name: Build all test cases
+      run: |
+        mkdir -p build
+
+        # Build 001_fork_in_used_leak
+        echo "Building 001_fork_in_used_leak..."
+        gcc -O2 -Wall -Wextra -o build/001_fork_in_used_leak \
+            001_fork_in_used_leak/main.c -pthread
+
+        # Add more test cases here as they are added
+        # gcc -O2 -Wall -Wextra -o build/002_xxx 002_xxx/main.c -pthread
+
+        echo "Build complete!"
+        ls -la build/
+
+    - name: Verify binaries are x86_64
+      run: |
+        echo "Verifying binary architectures..."
+        for f in build/*; do
+          if [ -f "$f" ]; then
+            file "$f"
+          fi
+        done
+
+    - name: Upload binaries
+      uses: actions/upload-artifact@v4
+      with:
+        name: box64-test-binaries-x86_64
+        path: build/
+        retention-days: 30
+
+    - name: Create release binaries (on tag)
+      if: startsWith(github.ref, 'refs/tags/')
+      uses: actions/upload-artifact@v4
+      with:
+        name: release-${{ github.ref_name }}
+        path: build/
+        retention-days: 90
