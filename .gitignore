@@ -1,0 +1,20 @@
+# Compiled binaries
+bin/
+*.o
+
+# Test artifacts
+*.log
+*.out
+
+# Editor files
+*.swp
+*.swo
+*~
+.vscode/
+.idea/
+
+# macOS
+.DS_Store
+
+# Docker artifacts
+.docker/

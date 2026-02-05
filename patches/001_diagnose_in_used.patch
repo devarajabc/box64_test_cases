@@ -1,0 +1,86 @@
+From: Box64 Test Cases
+Subject: [PATCH] Diagnostic: Add in_used statistics at fork time
+
+This patch adds diagnostic output to show in_used counter statistics
+before fork (in parent) and after fork (in child).
+
+Apply to Box64:
+  cd /path/to/box64
+  git apply /path/to/001_diagnose_in_used.patch
+
+Remove after testing:
+  git checkout src/custommem.c
+
+---
+ src/custommem.c | 54 ++++++++++++++++++++++++++++++++++++++++++++++++++++++
+ 1 file changed, 54 insertions(+)
+
+diff --git a/src/custommem.c b/src/custommem.c
+index xxxxxxx..yyyyyyy 100644
+--- a/src/custommem.c
++++ b/src/custommem.c
+@@ -2926,10 +2926,64 @@ static void init_mutexes()
+ #endif
+ }
+
++#ifdef DYNAREC
++/*
++ * Diagnostic function: count and report in_used statistics for all dynablocks.
++ * Used to verify stale in_used counters after fork.
++ */
++static void diagnose_in_used_stats(const char* context)
++{
++    if(!mmaplist) return;
++
++    int total_blocks = 0;
++    int blocks_with_in_used = 0;
++    int max_in_used = 0;
++    uint32_t sum_in_used = 0;
++
++    for(int i = 0; i < mmaplist->size; ++i) {
++        blocklist_t* bl = mmaplist->chunks[i];
++        if(!bl) continue;
++
++        blockmark_t* p = bl->block;
++        blockmark_t* end = bl->block + bl->size - sizeof(blockmark_t);
++
++        while(p < end) {
++            blockmark_t *n = NEXT_BLOCK(p);
++            if(p->next.fill) {
++                dynablock_t* db = *(dynablock_t**)p->mark;
++                if(db && db->done) {
++                    total_blocks++;
++                    int in_used = native_lock_get_d(&db->in_used);
++                    if(in_used > 0) {
++                        blocks_with_in_used++;
++                        sum_in_used += in_used;
++                        if(in_used > max_in_used) max_in_used = in_used;
++                    }
++                }
++            }
++            p = n;
++        }
++    }
++
++    printf_log(LOG_NONE, "\n");
++    printf_log(LOG_NONE, "=== in_used DIAGNOSTIC [%s] ===\n", context);
++    printf_log(LOG_NONE, "  Total dynarec blocks:    %d\n", total_blocks);
++    printf_log(LOG_NONE, "  Blocks with in_used > 0: %d\n", blocks_with_in_used);
++    printf_log(LOG_NONE, "  Sum of all in_used:      %u\n", sum_in_used);
++    printf_log(LOG_NONE, "  Max in_used value:       %d\n", max_in_used);
++    printf_log(LOG_NONE, "==========================================\n\n");
++}
++#endif
++
+ static void atfork_child_custommem(void)
+ {
+     // (re)init mutex if it was lock before the fork
+     init_mutexes();
++#ifdef DYNAREC
++    diagnose_in_used_stats("CHILD after fork");
++#endif
+ }
+
+ void preserve_highest32()
+--
+2.x.x
