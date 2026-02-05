@@ -6,6 +6,20 @@ A collection of test programs to verify Box64 behavior, reproduce bugs, and vali
 
 These are x86_64 Linux programs designed to be run under [Box64](https://github.com/ptitSeb/box64) on ARM64/RV64/LA64 systems.
 
+## Background Documentation
+
+Before working on these tests, it's helpful to understand how Box64 works internally:
+
+- [**How Box64 Works**](docs/HOW_BOX64_WORKS.md) - Complete step-by-step walkthrough of x86_64 emulation, dynarec translation, and syscall handling
+- [**How Box64 Works Part 2**](docs/HOW_BOX64_WORKS_2.md) - Process & thread management, fork handling, TLS, and thread cancellation
+
+These documents explain key concepts like:
+- The dynarec 4-pass compilation pipeline
+- Register mapping (x86_64 → ARM64)
+- Deferred fork mechanism (`emu->fork` flag)
+- Thread-local storage (TLS) setup
+- The `in_used` reference counting for dynablock lifecycle
+
 ## Building
 
 ### Prerequisites
