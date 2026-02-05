@@ -1,8 +1,9 @@
 # 002_0f00_missing_braces Makefile
+# Compile as 32-bit to test the missing braces bug in 32-bit mode
 
 CC ?= gcc
-CFLAGS ?= -O2 -Wall -Wextra
-LDFLAGS ?=
+CFLAGS ?= -m32 -O2 -Wall -Wextra
+LDFLAGS ?= -m32
 
 TARGET = 002_0f00_missing_braces
 BIN_DIR ?= .

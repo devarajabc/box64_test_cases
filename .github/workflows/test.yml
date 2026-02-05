@@ -27,42 +27,52 @@ jobs:
         sudo apt-get update
         sudo apt-get install -y build-essential cmake git file
 
-    - name: Install x86_64 cross-compiler
+    - name: Install cross-compilers
       run: |
         sudo apt-get install -y gcc-x86-64-linux-gnu g++-x86-64-linux-gnu
+        sudo apt-get install -y gcc-i686-linux-gnu g++-i686-linux-gnu
 
-    - name: Build x86_64 tests
-      run: make all CC=x86_64-linux-gnu-gcc
+    - name: Build tests
+      run: |
+        mkdir -p bin
+        # Build 64-bit tests
+        make -C 001_fork_in_used_leak BIN_DIR=../bin CC=x86_64-linux-gnu-gcc
+        # Build 32-bit test (002 needs 32-bit for the braces bug)
+        make -C 002_0f00_missing_braces BIN_DIR=../bin CC=i686-linux-gnu-gcc
 
-    - name: Verify binaries are x86_64
-      run: file bin/*
+    - name: Verify binaries
+      run: |
+        echo "=== Binary types ==="
+        file bin/*
 
-    - name: Build Box64
+    - name: Build Box64 with Box32 support
       run: |
         git clone --depth 1 --branch CHECK_WOWO https://github.com/devarajabc/box64.git /tmp/box64
         cd /tmp/box64
         mkdir build && cd build
-        cmake .. -D ARM_DYNAREC=ON -D CMAKE_BUILD_TYPE=RelWithDebInfo
+        cmake .. -D ARM_DYNAREC=ON -D CMAKE_BUILD_TYPE=RelWithDebInfo -D BOX32=ON
         make -j$(nproc)
         sudo make install
 
-    - name: Run tests (interpreter)
+    - name: Run 64-bit test (interpreter)
       run: |
-        echo "=== BOX64_DYNAREC=0 (interpreter) ==="
-        for test in bin/*; do
-          echo ""
-          echo ">>> $test"
-          BOX64_DYNAREC=0 box64 "$test" || echo "EXIT CODE: $?"
-        done
+        echo "=== 64-bit test: BOX64_DYNAREC=0 ==="
+        BOX64_DYNAREC=0 box64 bin/001_fork_in_used_leak || echo "EXIT CODE: $?"
 
-    - name: Run tests (dynarec)
+    - name: Run 64-bit test (dynarec)
       run: |
-        echo "=== BOX64_DYNAREC=1 (dynarec) ==="
-        for test in bin/*; do
-          echo ""
-          echo ">>> $test"
-          BOX64_DYNAREC=1 box64 "$test" || echo "EXIT CODE: $?"
-        done
+        echo "=== 64-bit test: BOX64_DYNAREC=1 ==="
+        BOX64_DYNAREC=1 box64 bin/001_fork_in_used_leak || echo "EXIT CODE: $?"
+
+    - name: Run 32-bit test (interpreter)
+      run: |
+        echo "=== 32-bit test: BOX64_DYNAREC=0 ==="
+        BOX64_DYNAREC=0 box64 bin/002_0f00_missing_braces || echo "EXIT CODE: $?"
+
+    - name: Run 32-bit test (dynarec)
+      run: |
+        echo "=== 32-bit test: BOX64_DYNAREC=1 ==="
+        BOX64_DYNAREC=1 box64 bin/002_0f00_missing_braces || echo "EXIT CODE: $?"
 
   # Fallback: Use QEMU on x86_64 runner (slower, always available)
   test-qemu-fallback:
@@ -70,7 +80,6 @@ jobs:
     runs-on: ubuntu-latest
     if: ${{ github.event.inputs.use_qemu == 'true' || failure() }}
     needs: [test-arm64-runner]
-    # Run if ARM64 job fails OR if manually triggered with use_qemu=true
 
     steps:
     - uses: actions/checkout@v4
@@ -90,67 +99,29 @@ jobs:
             set -e
             echo "=== Setting up environment ==="
             apt-get update
-            apt-get install -y build-essential cmake git file gcc-x86-64-linux-gnu
+            apt-get install -y build-essential cmake git file
+            apt-get install -y gcc-x86-64-linux-gnu gcc-i686-linux-gnu
 
-            echo "=== Building x86_64 test binaries ==="
-            make all CC=x86_64-linux-gnu-gcc
+            echo "=== Building test binaries ==="
+            mkdir -p bin
+            make -C 001_fork_in_used_leak BIN_DIR=../bin CC=x86_64-linux-gnu-gcc
+            make -C 002_0f00_missing_braces BIN_DIR=../bin CC=i686-linux-gnu-gcc
             file bin/*
 
-            echo "=== Building Box64 ==="
+            echo "=== Building Box64 with Box32 ==="
             git clone --depth 1 --branch CHECK_WOWO https://github.com/devarajabc/box64.git /tmp/box64
             cd /tmp/box64
             mkdir build && cd build
-            cmake .. -D ARM_DYNAREC=ON -D CMAKE_BUILD_TYPE=RelWithDebInfo
+            cmake .. -D ARM_DYNAREC=ON -D CMAKE_BUILD_TYPE=RelWithDebInfo -D BOX32=ON
             make -j$(nproc)
             make install
             cd /workspace
 
             echo ""
-            echo "=== Running tests (interpreter) ==="
-            for test in bin/*; do
-              echo ""
-              echo ">>> $test"
-              BOX64_DYNAREC=0 box64 "$test" || echo "EXIT CODE: $?"
-            done
+            echo "=== Running 32-bit test (interpreter) ==="
+            BOX64_DYNAREC=0 box64 bin/002_0f00_missing_braces || echo "EXIT CODE: $?"
 
             echo ""
-            echo "=== Running tests (dynarec) ==="
-            for test in bin/*; do
-              echo ""
-              echo ">>> $test"
-              BOX64_DYNAREC=1 box64 "$test" || echo "EXIT CODE: $?"
-            done
-          '
-
-  # Always-run QEMU job (can be enabled for parallel testing)
-  test-qemu-always:
-    name: QEMU (parallel)
-    runs-on: ubuntu-latest
-    if: false  # Set to true to always run QEMU in parallel with ARM64 runner
-
-    steps:
-    - uses: actions/checkout@v4
-
-    - name: Set up QEMU
-      uses: docker/setup-qemu-action@v3
-      with:
-        platforms: arm64
-
-    - name: Build and test in ARM64 container
-      run: |
-        docker run --rm --platform linux/arm64 \
-          -v ${{ github.workspace }}:/workspace \
-          -w /workspace \
-          arm64v8/ubuntu:22.04 \
-          bash -c '
-            apt-get update
-            apt-get install -y build-essential cmake git file gcc-x86-64-linux-gnu
-            make all CC=x86_64-linux-gnu-gcc
-            git clone --depth 1 --branch CHECK_WOWO https://github.com/devarajabc/box64.git /tmp/box64
-            cd /tmp/box64 && mkdir build && cd build
-            cmake .. -D ARM_DYNAREC=ON -D CMAKE_BUILD_TYPE=RelWithDebInfo
-            make -j$(nproc) && make install
-            cd /workspace
-            echo "=== Interpreter ===" && BOX64_DYNAREC=0 box64 bin/* || true
-            echo "=== Dynarec ===" && BOX64_DYNAREC=1 box64 bin/* || true
+            echo "=== Running 32-bit test (dynarec) ==="
+            BOX64_DYNAREC=1 box64 bin/002_0f00_missing_braces || echo "EXIT CODE: $?"
           '
