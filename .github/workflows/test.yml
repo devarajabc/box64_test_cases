@@ -39,7 +39,7 @@ jobs:
 
     - name: Build Box64
       run: |
-        git clone --depth 1 https://github.com/ptitSeb/box64.git /tmp/box64
+        git clone --depth 1 --branch CHECK_WOWO https://github.com/devarajabc/box64.git /tmp/box64
         cd /tmp/box64
         mkdir build && cd build
         cmake .. -D ARM_DYNAREC=ON -D CMAKE_BUILD_TYPE=RelWithDebInfo
@@ -97,7 +97,7 @@ jobs:
             file bin/*
 
             echo "=== Building Box64 ==="
-            git clone --depth 1 https://github.com/ptitSeb/box64.git /tmp/box64
+            git clone --depth 1 --branch CHECK_WOWO https://github.com/devarajabc/box64.git /tmp/box64
             cd /tmp/box64
             mkdir build && cd build
             cmake .. -D ARM_DYNAREC=ON -D CMAKE_BUILD_TYPE=RelWithDebInfo
@@ -146,7 +146,7 @@ jobs:
             apt-get update
             apt-get install -y build-essential cmake git file gcc-x86-64-linux-gnu
             make all CC=x86_64-linux-gnu-gcc
-            git clone --depth 1 https://github.com/ptitSeb/box64.git /tmp/box64
+            git clone --depth 1 --branch CHECK_WOWO https://github.com/devarajabc/box64.git /tmp/box64
             cd /tmp/box64 && mkdir build && cd build
             cmake .. -D ARM_DYNAREC=ON -D CMAKE_BUILD_TYPE=RelWithDebInfo
             make -j$(nproc) && make install
