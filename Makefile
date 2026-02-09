@@ -8,7 +8,7 @@ LDFLAGS = -pthread
 BIN_DIR = bin
 
 # List of all test directories
-TESTS = 001_fork_in_used_leak 002_0f00_missing_braces
+TESTS = 001_fork_in_used_leak 002_0f00_missing_braces 003_mmaplist_chunks_leak
 
 .PHONY: all clean docker-build $(TESTS)
 
@@ -22,6 +22,9 @@ $(BIN_DIR):
 	$(MAKE) -C $@ BIN_DIR=../$(BIN_DIR)
 
 002_0f00_missing_braces: $(BIN_DIR)
+	$(MAKE) -C $@ BIN_DIR=../$(BIN_DIR)
+
+003_mmaplist_chunks_leak: $(BIN_DIR)
 	$(MAKE) -C $@ BIN_DIR=../$(BIN_DIR)
 
 clean:

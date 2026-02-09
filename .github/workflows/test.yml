@@ -47,7 +47,7 @@ jobs:
 
     - name: Build Box64 with Box32 support
       run: |
-        git clone --depth 1 --branch CHECK_WOWO https://github.com/devarajabc/box64.git /tmp/box64
+        git clone --depth 1 --branch bububu https://github.com/devarajabc/box64.git /tmp/box64
         cd /tmp/box64
         mkdir build && cd build
         cmake .. -D ARM_DYNAREC=ON -D CMAKE_BUILD_TYPE=RelWithDebInfo -D BOX32=ON
@@ -109,7 +109,7 @@ jobs:
             file bin/*
 
             echo "=== Building Box64 with Box32 ==="
-            git clone --depth 1 --branch CHECK_WOWO https://github.com/devarajabc/box64.git /tmp/box64
+            git clone --depth 1 --branch bububu https://github.com/devarajabc/box64.git /tmp/box64
             cd /tmp/box64
             mkdir build && cd build
             cmake .. -D ARM_DYNAREC=ON -D CMAKE_BUILD_TYPE=RelWithDebInfo -D BOX32=ON

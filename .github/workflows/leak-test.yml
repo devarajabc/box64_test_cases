@@ -1,0 +1,127 @@
+name: Leak Test - mmaplist chunks
+
+on:
+  push:
+    branches: [ main, master ]
+  pull_request:
+  workflow_dispatch:
+
+jobs:
+  valgrind-leak-test:
+    name: Valgrind Before/After Fix
+    runs-on: ubuntu-24.04-arm
+
+    steps:
+    - uses: actions/checkout@v4
+
+    - name: Install dependencies
+      run: |
+        sudo apt-get update
+        sudo apt-get install -y build-essential cmake git file valgrind
+        sudo apt-get install -y gcc-x86-64-linux-gnu
+
+    - name: Build test binary
+      run: |
+        mkdir -p bin
+        make -C 003_mmaplist_chunks_leak BIN_DIR=../bin CC=x86_64-linux-gnu-gcc
+        file bin/003_mmaplist_chunks_leak
+
+    # ── BEFORE FIX ──────────────────────────────────────────────
+    - name: Build Box64 (BEFORE fix - upstream main)
+      run: |
+        git clone --depth 1 https://github.com/ptitSeb/box64.git /tmp/box64-before
+        cd /tmp/box64-before
+        mkdir build && cd build
+        cmake .. -D ARM_DYNAREC=ON -D CMAKE_BUILD_TYPE=RelWithDebInfo
+        make -j$(nproc)
+        sudo make install
+
+    - name: Valgrind BEFORE fix
+      run: |
+        echo "============================================"
+        echo " BEFORE FIX: Expecting chunks leak"
+        echo "============================================"
+        # Run under valgrind and capture output
+        # Use --error-exitcode=0 so the step doesn't fail
+        valgrind --leak-check=full \
+                 --show-leak-kinds=definite,indirect \
+                 --track-origins=yes \
+                 --num-callers=20 \
+                 box64 bin/003_mmaplist_chunks_leak \
+                 2>&1 | tee /tmp/valgrind_before.txt
+
+        echo ""
+        echo "=== LEAK SUMMARY (BEFORE FIX) ==="
+        grep -E "(definitely|indirectly) lost" /tmp/valgrind_before.txt || echo "No standard leak line found"
+        echo ""
+        echo "=== Leak details related to realloc/Mmaplist ==="
+        grep -B 2 -A 10 "realloc\|Mmaplist\|MmaplistAdd" /tmp/valgrind_before.txt || echo "No Mmaplist-related leaks found"
+
+    # ── AFTER FIX ───────────────────────────────────────────────
+    - name: Apply fix patch to Box64
+      run: |
+        cd /tmp/box64-before
+        echo "=== Applying fix patch ==="
+        git apply ${{ github.workspace }}/patches/003_fix_mmaplist_chunks_leak.patch
+        echo "=== Patch applied ==="
+        git diff --stat
+
+    - name: Rebuild Box64 (AFTER fix)
+      run: |
+        cd /tmp/box64-before/build
+        make -j$(nproc)
+        sudo make install
+
+    - name: Valgrind AFTER fix
+      run: |
+        echo "============================================"
+        echo " AFTER FIX: chunks leak should be gone"
+        echo "============================================"
+        valgrind --leak-check=full \
+                 --show-leak-kinds=definite,indirect \
+                 --track-origins=yes \
+                 --num-callers=20 \
+                 box64 bin/003_mmaplist_chunks_leak \
+                 2>&1 | tee /tmp/valgrind_after.txt
+
+        echo ""
+        echo "=== LEAK SUMMARY (AFTER FIX) ==="
+        grep -E "(definitely|indirectly) lost" /tmp/valgrind_after.txt || echo "No standard leak line found"
+        echo ""
+        echo "=== Leak details related to realloc/Mmaplist ==="
+        grep -B 2 -A 10 "realloc\|Mmaplist\|MmaplistAdd" /tmp/valgrind_after.txt || echo "No Mmaplist-related leaks found (GOOD!)"
+
+    # ── COMPARISON ──────────────────────────────────────────────
+    - name: Compare results
+      run: |
+        echo "============================================"
+        echo " COMPARISON: Before vs After"
+        echo "============================================"
+        echo ""
+
+        echo "--- BEFORE FIX ---"
+        grep "LEAK SUMMARY" /tmp/valgrind_before.txt || true
+        grep -E "definitely lost|indirectly lost" /tmp/valgrind_before.txt || echo "(none)"
+        echo ""
+
+        echo "--- AFTER FIX ---"
+        grep "LEAK SUMMARY" /tmp/valgrind_after.txt || true
+        grep -E "definitely lost|indirectly lost" /tmp/valgrind_after.txt || echo "(none)"
+        echo ""
+
+        # Extract "definitely lost" byte counts for comparison
+        BEFORE=$(grep "definitely lost" /tmp/valgrind_before.txt | grep -oP '[\d,]+ bytes' | head -1 || echo "0 bytes")
+        AFTER=$(grep "definitely lost" /tmp/valgrind_after.txt | grep -oP '[\d,]+ bytes' | head -1 || echo "0 bytes")
+
+        echo "Definitely lost BEFORE: $BEFORE"
+        echo "Definitely lost AFTER:  $AFTER"
+
+    - name: Upload valgrind logs
+      if: always()
+      uses: actions/upload-artifact@v4
+      with:
+        name: valgrind-logs
+        path: |
+          /tmp/valgrind_before.txt
+          /tmp/valgrind_after.txt
+        retention-days: 30
