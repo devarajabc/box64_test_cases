@@ -20,11 +20,12 @@ jobs:
         sudo apt-get install -y build-essential cmake git file valgrind
         sudo apt-get install -y gcc-x86-64-linux-gnu
 
-    - name: Build test binary
+    - name: Build test binary and shared library
       run: |
         mkdir -p bin
         make -C 003_mmaplist_chunks_leak BIN_DIR=../bin CC=x86_64-linux-gnu-gcc
-        file bin/003_mmaplist_chunks_leak
+        echo "=== Built artifacts ==="
+        file bin/003_mmaplist_chunks_leak bin/libhot.so
 
     # ── BEFORE FIX ──────────────────────────────────────────────
     - name: Build Box64 (BEFORE fix - upstream main)
@@ -41,13 +42,12 @@ jobs:
         echo "============================================"
         echo " BEFORE FIX: Expecting chunks leak"
         echo "============================================"
-        # Run under valgrind and capture output
-        # Use --error-exitcode=0 so the step doesn't fail
+        cd bin
         valgrind --leak-check=full \
                  --show-leak-kinds=definite,indirect \
                  --track-origins=yes \
                  --num-callers=20 \
-                 box64 bin/003_mmaplist_chunks_leak \
+                 box64 ./003_mmaplist_chunks_leak 100 \
                  2>&1 | tee /tmp/valgrind_before.txt
 
         echo ""
@@ -77,11 +77,12 @@ jobs:
         echo "============================================"
         echo " AFTER FIX: chunks leak should be gone"
         echo "============================================"
+        cd bin
         valgrind --leak-check=full \
                  --show-leak-kinds=definite,indirect \
                  --track-origins=yes \
                  --num-callers=20 \
-                 box64 bin/003_mmaplist_chunks_leak \
+                 box64 ./003_mmaplist_chunks_leak 100 \
                  2>&1 | tee /tmp/valgrind_after.txt
 
         echo ""
