@@ -37,6 +37,7 @@ jobs:
         mkdir -p bin
         # Build 64-bit tests
         make -C 001_fork_in_used_leak BIN_DIR=../bin CC=x86_64-linux-gnu-gcc
+        make -C 004_atfork_thread_safety BIN_DIR=../bin CC=x86_64-linux-gnu-gcc
         # Build 32-bit test (002 needs 32-bit for the braces bug)
         make -C 002_0f00_missing_braces BIN_DIR=../bin CC=i686-linux-gnu-gcc
 
@@ -63,6 +64,16 @@ jobs:
       run: |
         echo "=== 64-bit test: BOX64_DYNAREC=1 ==="
         BOX64_DYNAREC=1 box64 bin/001_fork_in_used_leak || echo "EXIT CODE: $?"
+
+    - name: Run atfork thread safety test (interpreter)
+      run: |
+        echo "=== atfork thread safety: BOX64_DYNAREC=0 ==="
+        BOX64_DYNAREC=0 box64 bin/004_atfork_thread_safety --rounds 10 || echo "EXIT CODE: $?"
+
+    - name: Run atfork thread safety test (dynarec)
+      run: |
+        echo "=== atfork thread safety: BOX64_DYNAREC=1 ==="
+        BOX64_DYNAREC=1 box64 bin/004_atfork_thread_safety --rounds 10 || echo "EXIT CODE: $?"
 
     - name: Run 32-bit test (interpreter)
       run: |
@@ -105,6 +116,7 @@ jobs:
             echo "=== Building test binaries ==="
             mkdir -p bin
             make -C 001_fork_in_used_leak BIN_DIR=../bin CC=x86_64-linux-gnu-gcc
+            make -C 004_atfork_thread_safety BIN_DIR=../bin CC=x86_64-linux-gnu-gcc
             make -C 002_0f00_missing_braces BIN_DIR=../bin CC=i686-linux-gnu-gcc
             file bin/*
 
@@ -116,6 +128,14 @@ jobs:
             make -j$(nproc)
             make install
             cd /workspace
+
+            echo ""
+            echo "=== Running atfork thread safety (interpreter) ==="
+            BOX64_DYNAREC=0 box64 bin/004_atfork_thread_safety --rounds 10 || echo "EXIT CODE: $?"
+
+            echo ""
+            echo "=== Running atfork thread safety (dynarec) ==="
+            BOX64_DYNAREC=1 box64 bin/004_atfork_thread_safety --rounds 10 || echo "EXIT CODE: $?"
 
             echo ""
             echo "=== Running 32-bit test (interpreter) ==="
